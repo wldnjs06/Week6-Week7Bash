@@ -1,26 +1,46 @@
 using UnityEngine;
-
+using UnityEngine.InputSystem;
+using System.Collections;
 public class TowerSpawner : MonoBehaviour
 {
     [SerializeField]
 	private	TowerTemplateSO towerTemplate;	
-    [SerializeField]
-	private	EnemySpawner enemySpawner;	// 현재 맵에 존재하는 적 리스트 정보를 얻기 위해
-
-    [SerializeField]
+	[SerializeField]
 	private	PlayerGold playerGold;
     [SerializeField]
+	private	EnemySpawner enemySpawner;	// 현재 맵에 존재하는 적 리스트 정보를 얻기 위해
+    [SerializeField]
 	private	SystemTextViewer systemTextViewer;
+	[SerializeField]
+	private	ObjectDetector objectDetector;
+
+    private	bool isOnTowerButton = false;	
+	private	GameObject followTowerClone = null;
+
+    public void ReadyToSpawnTower()
+	{
+
+		if ( isOnTowerButton == true ) return;
+
+		if ( towerTemplate.weapon[0].cost > playerGold.CurrentGold )
+		{
+			
+			systemTextViewer.PrintText(MESSAGE.MONEY);
+			return;
+		}
+
+		followTowerClone = Instantiate(towerTemplate.followTowerPrefab);
+		followTowerClone.GetComponent<ObjectFollowMousePosition>().Setup(objectDetector);
+
+		isOnTowerButton = true;
+
+		StartCoroutine(nameof(OnTowerCancelProcess));
+    }
 
     public void TrySpawnTower(Transform tileTransform)
     {
-        //타워 건설 가능 여부 확인
-        //1. 골드가 부족하면 타워 건설 불가능 할 때 출력
-        if (towerTemplate.weapon[0].cost > playerGold.CurrentGold)
-        {
-            systemTextViewer.PrintText(MESSAGE.MONEY);
-            return;
-        }
+        if ( isOnTowerButton == false ) return;
+
 		// 타워가 건설되어 있음으로 설정
 		Tile tile = tileTransform.GetComponent<Tile>();
 
@@ -31,6 +51,8 @@ public class TowerSpawner : MonoBehaviour
 			return;
 		}
 
+        isOnTowerButton = false;
+
 		tile.IsbuildTower = true;
 
 		playerGold.CurrentGold -= towerTemplate.weapon[0].cost;
@@ -39,5 +61,25 @@ public class TowerSpawner : MonoBehaviour
 		var clone = Instantiate(towerTemplate.towerPrefab, position, Quaternion.identity);
 
 		clone.GetComponent<TowerWeapon>().Setup(enemySpawner, playerGold, tile);
+
+		Destroy(followTowerClone);
+
+		StopCoroutine(nameof(OnTowerCancelProcess));
     }
+
+	private IEnumerator OnTowerCancelProcess()
+	{
+		while ( true )
+		{
+			if ( Keyboard.current.escapeKey.wasPressedThisFrame ||
+				Mouse.current.rightButton.wasPressedThisFrame )
+			{
+				isOnTowerButton = false;
+				Destroy(followTowerClone);
+				break;
+			}
+
+			yield return null;
+		}
+	}
 }

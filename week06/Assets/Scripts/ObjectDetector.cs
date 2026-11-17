@@ -8,22 +8,30 @@ public class ObjectDetector : MonoBehaviour
     private TowerSpawner towerSpawner;
     [SerializeField]
 	private	UIPopupTower uiPopupTower;
-
+    
     private Camera mainCamera;
-    private Vector2 screanPoint;
+    private Vector2 screenPoint;
 
     private void Awake()
     {
         mainCamera = Camera.main;
     }
 
+    public Vector3 GetPointerWorldPosition()
+	{
+		Vector3 worldPoint = mainCamera.ScreenToWorldPoint(screenPoint);
+		worldPoint.z = 0f;
+
+		return worldPoint;
+	}
+
     public void OnPoint(InputAction.CallbackContext context)
     {
-        screanPoint = context.ReadValue<Vector2>();
+        screenPoint = context.ReadValue<Vector2>();
     }
 
-public void Onclick(InputAction.CallbackContext context)
-{
+    public void Onclick(InputAction.CallbackContext context)
+    {
         //버튼을 누르거나 땔 때 호출
         if(!context.performed) return;
 
@@ -31,7 +39,7 @@ public void Onclick(InputAction.CallbackContext context)
         if(!context.ReadValueAsButton()) return;
 
         //카메라 위치에서 화면의 터치 위치를 관통하는 레이 생성
-        Ray ray = mainCamera.ScreenPointToRay(screanPoint);
+        Ray ray = mainCamera.ScreenPointToRay(screenPoint);
 
         //2D 모니터를 통해 3D 월드의 오브젝트를 마우스로 선택하는 방법
         //레이와 충돌하는 오브젝트를 검증해 hit에 저장
