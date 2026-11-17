@@ -1,16 +1,30 @@
 using UnityEngine;
 using System.Collections;
 
-public enum WeaponState { SearchClosestTarget = 0, AttackToTarget }
+public enum WeaponType	{ Cannon = 0, Laser,}
+public enum WeaponState { SearchClosestTarget = 0, TryAttackCannon, TryAttackLaser }
 
 public class TowerWeapon : MonoBehaviour
 {
+	[Header("Commons")]
 	[SerializeField]
 	private	TowerTemplateSO	towerTemplate; // 타워 정보
 	[SerializeField]
-	private	Transform spawnPoint;				// 발사체 생성 위치
+	private	Transform spawnPoint;
+	[SerializeField]
+	private	WeaponType weaponType;	
+	
+	[Header("Cannon")]			
 	[SerializeField]
 	private	GameObject projectilePrefab;		// 발사체 프리팹
+	
+	[Header("Laser")]
+	[SerializeField]
+	private	LineRenderer lineRenderer;
+	[SerializeField]
+	private	Transform hitEffect;				
+	[SerializeField]
+	private	LayerMask targetLayer;
 	private	EnemySpawner enemySpawner;			// 게임에 존재하는 적 정보 획득용
 	private	SpriteRenderer	spriteRenderer;	
 	private	PlayerGold playerGold;	
@@ -29,9 +43,12 @@ public class TowerWeapon : MonoBehaviour
 	public void Setup(EnemySpawner enemySpawner, PlayerGold playerGold, Tile ownerTile)
 	{
 		spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+		
 		this.enemySpawner = enemySpawner;
 		this.playerGold	= playerGold;
 		this.ownerTile	= ownerTile;
+
+		if ( weaponType == WeaponType.Laser ) DisableLaser();
 		
 		// 첫 상태는 목표를 탐색하는 SearchClosestTarget으로 설정
 		ChangeState(WeaponState.SearchClosestTarget);
@@ -70,57 +87,62 @@ public class TowerWeapon : MonoBehaviour
 
 	private IEnumerator SearchClosestTarget()
 	{
-		// 제일 가까이 있는 적을 찾기 위해 최초 거리를 최대한 크게 설정
-		float closestDistSqr = Mathf.Infinity;
-
 		while ( true )
 		{
-			// EnemySpawner의 EnemyList에 있는 현재 맵에 존재하는 모든 적 검사
-			for ( int i = 0; i < enemySpawner.EnemyList.Count; ++ i )
+			attackTarget = FindClosestTarge();
+
+			if ( attackTarget != null )
 			{
-				float distance = Vector3.Distance(enemySpawner.EnemyList[i].transform.position, transform.position);
-				// 현재 검사중인 적과의 거리가 공격 범위 내에 있고, 현재까지 검사한 적보다 거리가 가까우면
-				if ( distance <= towerTemplate.weapon[level].range && distance <= closestDistSqr )
+				if ( weaponType == WeaponType.Cannon )
 				{
-					closestDistSqr	= distance;
-					attackTarget	= enemySpawner.EnemyList[i].transform;
+					ChangeState(WeaponState.TryAttackCannon);
+				}
+				else if ( weaponType == WeaponType.Laser )
+				{
+					ChangeState(WeaponState.TryAttackLaser);
 				}
 			}
-
-			if ( attackTarget != null ) ChangeState(WeaponState.AttackToTarget);
 
 			yield return null;
 		}
 	}
 
-	private IEnumerator AttackToTarget()
+	private IEnumerator TryAttackCannon()
+	
+	
 	{
 		while ( true )
 		{
-			// 1. target이 있는지 검사 (다른 발사체에 의해 제거, Goal 지점까지 이동해 삭제 등)
-			if ( attackTarget == null )
+			if (IsPossibleToAttackTarget() == false)
 			{
 				ChangeState(WeaponState.SearchClosestTarget);
 				break;
 			}
-
-			// 2. target이 공격 밤위 안에 있는지 검사 (공격 범위를 벗어나면 새로운 적 탐색)
-			float distance = Vector3.Distance(attackTarget.position, transform.position);
-			if ( distance > towerTemplate.weapon[level].range )
-			{
-				attackTarget = null;
-				ChangeState(WeaponState.SearchClosestTarget);
-				break;
-			}
-
-			// 3. attackRate 시간만큼 대기
+			
 			yield return new WaitForSeconds(towerTemplate.weapon[level].rate);
 
-			// 4. 공격 (발사체 생성)
 			SpawnProjectile();
 		}
 	}
+	private IEnumerator TryAttackLaser()
+	{
+		
+		EnableLaser();
 
+		while ( true )
+		{			
+			if ( IsPossibleToAttackTarget() == false )
+			{
+				DisableLaser();
+				ChangeState(WeaponState.SearchClosestTarget);
+				break;
+			}
+
+			SpawnLaser();
+
+			yield return null;
+		}
+	}
 	private void SpawnProjectile()
 	{
 		var clone = Instantiate(projectilePrefab, spawnPoint.position, Quaternion.identity);
@@ -140,10 +162,16 @@ public class TowerWeapon : MonoBehaviour
 
 		playerGold.CurrentGold -= towerTemplate.weapon[level].cost;
 
+		if ( weaponType == WeaponType.Laser )
+		{		
+			lineRenderer.startWidth	= 0.05f + level * 0.05f;
+			lineRenderer.endWidth	= 0.05f;
+		}
+		
 		return true;
 	}
 
-		public void Sell()
+	public void Sell()
 	{
 		playerGold.CurrentGold += towerTemplate.weapon[level].sell;
 		
@@ -151,5 +179,77 @@ public class TowerWeapon : MonoBehaviour
 
 		Destroy(gameObject);
 	}
+	private Transform FindClosestTarge()
+	{
+		
+		float closestDistSqr = Mathf.Infinity;
+
+		
+		for ( int i = 0; i < enemySpawner.EnemyList.Count; ++ i )
+		{
+			float distance = Vector3.Distance(enemySpawner.EnemyList[i].transform.position, transform.position);
+			
+			if ( distance <= towerTemplate.weapon[level].range && distance <= closestDistSqr )
+			{
+				closestDistSqr	= distance;
+				attackTarget	= enemySpawner.EnemyList[i].transform;
+			}
+		}
+
+		return attackTarget;
+	}
+
+	private bool IsPossibleToAttackTarget()
+	{
+		
+		if ( attackTarget == null )
+		{
+			return false;
+		}
+
+		float distance = Vector3.Distance(attackTarget.position, transform.position);
+		if ( distance > towerTemplate.weapon[level].range )
+		{
+			attackTarget = null;
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private void EnableLaser()
+	{
+		lineRenderer.gameObject.SetActive(true);
+		hitEffect.gameObject.SetActive(true);
+	}
+
+		private void DisableLaser()
+	{
+		lineRenderer.gameObject.SetActive(false);
+		hitEffect.gameObject.SetActive(false);
+	}
+
+	private void SpawnLaser()
+	{
+		Vector3 direction = (attackTarget.position - spawnPoint.position).normalized;
+		var hit = Physics2D.RaycastAll(spawnPoint.position, direction, towerTemplate.weapon[level].range, targetLayer);
+
+		for ( int i = 0; i < hit.Length; ++ i )
+		{
+			if ( hit[i].transform == attackTarget )
+			{
+				lineRenderer.SetPosition(0, spawnPoint.position);
+				lineRenderer.SetPosition(1, new Vector3(hit[i].point.x, hit[i].point.y, 0) + Vector3.back);
+				
+				hitEffect.position = hit[i].point;
+				
+				//float damage = towerTemplate.weapon[level].damage + AddedDamage;
+				
+				attackTarget.GetComponent<EnemyHP>().TakeDamage(towerTemplate.weapon[level].damage * Time.deltaTime);
+			}
+		}
+	}
+
 }
 
