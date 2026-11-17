@@ -11,7 +11,7 @@ public class Enemy : MonoBehaviour
 	[SerializeField]
 	private	Transform rotator;
     [SerializeField]
-    private float timeoffset = 1f; // 이동시간 = 거리 * timeoffset
+    private float timeOffset = 1f; // 이동시간 = 거리 * timeoffset
     [SerializeField]
 	private	int	gold = 10;
     private Transform[] wayPoints; // 이동 경로 정보
@@ -19,9 +19,16 @@ public class Enemy : MonoBehaviour
     private int currentIndex = 0; // 현재 목표지점 인덱스
     private EnemySpawner enemySpawner; // 적의 삭제를 enemySpawner에게 알려서 삭제
 
+    private	float baseTimeOffset;
     public	Transform HUDPoint => hudPoint;
+    public	float TimeOffset
+	{
+		get => timeOffset;
+		set => timeOffset = Mathf.Min(value, 5.0f);	
+	}
     public void Setup(EnemySpawner enemySpawner, Transform[] wayPoints)
     {
+        baseTimeOffset = timeOffset;
         this.enemySpawner = enemySpawner;
         // 적 이동 경로 정보 설정
         wayPointCount = wayPoints.Length;
@@ -66,7 +73,7 @@ public class Enemy : MonoBehaviour
     private IEnumerator MoveAtoB(Vector3 start, Vector3 end) 
     {
         float percent = 0f;
-        float moveTime = Vector3.Distance(start, end) * timeoffset;
+        float moveTime = Vector3.Distance(start, end) * timeOffset;
 
         while( percent < 1f)
         {
@@ -76,6 +83,11 @@ public class Enemy : MonoBehaviour
             yield return null;
         }
     }
+
+    public void ResetTimeOffset()
+	{
+		timeOffset = baseTimeOffset;
+	}
 
     public void OnDie(EnemyDestroyType type)
     {
